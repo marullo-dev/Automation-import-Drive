@@ -1,0 +1,44 @@
+services:
+  n8n:
+    image: n8nio/n8n:2.44.5
+    ports: ["5678:5678"]
+    environment:
+    #  - GENERIC_TIMEZONE=Europe/Rome
+    #  - TZ=Europe/Rome
+    #  - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+    #  - EXECUTIONS_DATA_PRUNE=true
+    #  - EXECUTIONS_DATA_MAX_AGE=720   # ore di storico conservato
+      - GENERIC_TIMEZONE=Europe/Rome
+      - TZ=Europe/Rome
+      #- N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_SECURE_COOKIE=false
+      #- N8N_EDITOR_BASE_URL=http://${IP_VM}:5678/
+      #- WEBHOOK_URL=http://${IP_VM}:5678/
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=720
+    volumes: 
+      - n8n_data:/home/node/.n8n
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    restart: unless-stopped
+
+  processor:
+    build: ./processor
+    ports: 
+      - "8000:8000"
+    environment:
+      - KEY_COLUMN=Product code   
+      - SHEET_NAME=0  
+    volumes: 
+      - ./logs:/app/logs
+      - ./data:/app/data 
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *logging
+    restart: unless-stopped
+volumes:
+  n8n_data:
