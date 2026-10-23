@@ -33,6 +33,7 @@ def norm(v) -> str:
 
 
 KEY_COLUMNS = [norm(c) for c in os.getenv("KEY_COLUMN", "Product code").split(",")]
+IGNORE_COLUMNS = {norm(c) for c in os.getenv("IGNORE_COLUMNS", "").split(",") if c.strip()}
 
 
 def canon(v):
@@ -72,13 +73,21 @@ def is_total_row(rec: dict) -> bool:
 
 
 def read_table(raw: bytes, sheet) -> list:
-    """Trova la riga di intestazione (prime 30 righe) e restituisce [(riga_excel, record)]."""
-    raw_df = pd.read_excel(io.BytesIO(raw), sheet_name=sheet, header=None, dtype=object)
+    """Trova la riga di intestazione (prime 40 righe) e restituisce [(riga_excel, record)]."""
+    xl = pd.ExcelFile(io.BytesIO(raw))
+    if isinstance(sheet, str) and sheet not in xl.sheet_names:
+        raise HTTPException(
+            422, f"Foglio '{sheet}' non trovato. Fogli presenti: {xl.sheet_names}"
+        )
+    raw_df = xl.parse(sheet, header=None, dtype=object)
     wanted = set(KEY_COLUMNS)
-    for i in range(min(len(raw_df), 30)):
+    for i in range(min(len(raw_df), 40)):
         header = ["" if pd.isna(v) else norm(v) for v in raw_df.iloc[i].tolist()]
         if wanted <= set(header):
-            cols = [(j, h) for j, h in enumerate(header) if h]
+            cols = [(j, h) for j, h in enumerate(header) if h and h not in IGNORE_COLUMNS]
+            dup_names = [n for n, c in collections.Counter(h for _, h in cols).items() if c > 1]
+            if dup_names:
+                raise HTTPException(422, f"Intestazioni duplicate nel foglio: {dup_names}")
             out = []
             for n, row in enumerate(raw_df.iloc[i + 1:].itertuples(index=False), start=i + 2):
                 rec = {h: canon(row[j]) for j, h in cols}
@@ -87,7 +96,9 @@ def read_table(raw: bytes, sheet) -> list:
                 out.append((n, rec))
             return out
     raise HTTPException(
-        422, f"Intestazione con le colonne {KEY_COLUMNS} non trovata nelle prime 30 righe"
+        422,
+        f"Intestazione con le colonne {KEY_COLUMNS} non trovata nelle prime 40 righe "
+        f"del foglio '{sheet}'",
     )
 
 

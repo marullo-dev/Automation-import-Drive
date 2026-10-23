@@ -24,9 +24,8 @@ services:
       - "8000:8000"
     environment:
       - KEY_COLUMN=${KEY_COLUMN}  
-      - SHEET_NAME=0  
-    volumes: 
-      - ./logs:/app/logs
+      - SHEET_NAME=${SHEET_NAME}
+      - IGNORE_COLUMNS=${IGNORE_COLUMNS}
       - ./data:/app/data 
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
